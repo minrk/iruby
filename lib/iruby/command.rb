@@ -87,7 +87,11 @@ module IRuby
       target_dir = File.join(File.dirname(__FILE__), 'static')
       unless (File.readlink(static_dir) rescue nil) == target_dir
         File.unlink(static_dir) rescue nil
-        File.symlink(target_dir, static_dir)
+				begin
+					File.symlink(target_dir, static_dir)
+				rescue
+					warn "Warning: Could not create symlink #{target_dir}, it may already exist"
+				end
       end
     end
   end
