@@ -1,0 +1,46 @@
+master
+
+  * Fix #19 (pp)
+
+0.1.9
+
+  * Check IPython version
+
+0.1.7/0.1.8
+
+  * Bugfixes #11, #12, #13
+
+0.1.6
+
+  * Print Matrix and GSL::Matrix as LaTeX
+  * Add check for Pry version
+
+0.1.5
+
+  * Implement a rich display system
+  * Fix error output
+
+0.1.4
+
+  * Extract display handler from kernel
+  * Always return a text/plain response
+
+0.1.3
+
+  * Implement missing request handlers
+  * Detect if Bundler is running and set kernel_cmd appropriately
+  * Improve Pry integration
+  * Add support for the gems gnuplot, gruff, rmagick and mini_magick
+
+0.1.2
+
+  * Support for Pry added
+  * Launch `iruby console` if plain `iruby` is started
+
+0.1.0
+
+  * Cleanup and rewrite of some parts
+
+0.0.1
+
+  * Initial version
