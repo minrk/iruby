@@ -1,0 +1,5 @@
+#!/usr/bin/env ruby
+
+$:.unshift File.expand_path(__dir__ + '/../lib')
+require 'iruby/command'
+IRuby::Command.new(ARGV).run

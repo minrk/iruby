@@ -1,31 +1,34 @@
 # coding: utf-8
-lib = File.expand_path('../lib', __FILE__)
-$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require 'iruby/version'
+require_relative 'lib/iruby/version'
+require 'date'
 
-Gem::Specification.new do |spec|
-  spec.name          = "iruby"
-  spec.version       = IRuby::VERSION
-  spec.authors       = ["Damián Silvani", "Min RK", "martin sarsale", "Josh Adams"]
-  spec.email         = ["benjaminrk@gmail.com"]
-  spec.description   = %q{Ruby Kernel for IPython}
-  spec.summary       = %q{A Ruby kernel for IPython frontends (notebook console, etc.)}
-  spec.homepage      = "https://github.com/minrk/iruby"
-  spec.license       = "MIT"
+Gem::Specification.new do |s|
+  s.name          = 'iruby'
+  s.date          = Date.today.to_s
+  s.version       = IRuby::VERSION
+  s.authors       = ['Daniel Mendler', 'The SciRuby developers']
+  s.email         = ['mail@daniel-mendler.de']
+  s.summary       = 'Ruby Kernel for Jupyter/IPython'
+  s.description   = 'A Ruby kernel for Jupyter/IPython frontends (e.g. notebook). Try it at try.jupyter.org.'
+  s.homepage      = 'https://github.com/SciRuby/iruby'
+  s.license       = 'MIT'
 
-  spec.files         = `git ls-files`.split($/)
-  spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
-  spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
-  spec.require_paths = ["lib"]
+  s.files         = `git ls-files`.split($/)
+  s.executables   = s.files.grep(%r{^bin/}) { |f| File.basename(f) }
+  s.test_files    = s.files.grep(%r{^test/})
+  s.require_paths = %w(lib)
 
-  spec.add_development_dependency "bundler", "~> 1.3"
-  spec.add_development_dependency "rake"
+  m = "Consider installing the optional dependencies to get additional functionality:\n"
+  File.read('Gemfile').scan(/gem\s+'(.*?)'/) { m << "  * #{$1}\n" }
+  s.post_install_message = m << "\n"
 
-  spec.add_runtime_dependency "bond"
-  spec.add_runtime_dependency "ffi-rzmq"
-  spec.add_runtime_dependency "json"
-  spec.add_runtime_dependency "term-ansicolor"
-  spec.add_runtime_dependency "trollop"
-  spec.add_runtime_dependency "uuid"
-  spec.add_runtime_dependency "gruff"
+  s.required_ruby_version = '>= 2.1.0'
+
+  s.add_development_dependency 'rake', '~> 10.4'
+  s.add_development_dependency 'minitest', '~> 5.6'
+
+  s.add_runtime_dependency 'bond', '~> 0.5'
+  s.add_runtime_dependency 'multi_json', '~> 1.11'
+  s.add_runtime_dependency 'mimemagic', '~> 0.3'
+  s.add_runtime_dependency 'data_uri', '~> 0.1'
 end

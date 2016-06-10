@@ -1,4 +1,15 @@
 source 'https://rubygems.org'
-
-# Specify your gem's dependencies in iruby.gemspec
 gemspec
+
+group :pry do
+  gem 'pry'
+  gem 'pry-doc'
+  gem 'awesome_print'
+end
+
+group :plot do
+  gem 'gnuplot'
+  gem 'rubyvis'
+  gem 'nyaplot', github: 'domitry/nyaplot'
+end
+

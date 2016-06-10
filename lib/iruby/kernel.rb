@@ -1,220 +1,165 @@
-require 'ffi-rzmq'
-require 'json'
-require 'ostruct'
-require 'term/ansicolor'
-
-require 'iruby/kernel_completer'
-require 'iruby/session'
-require 'iruby/out_stream'
-require 'iruby/display_hook'
-require 'iruby/output/html'
-
-
-class String
-  include Term::ANSIColor
-end
-
 module IRuby
-
-  class ResponseWithMime
-    def initialize(response, mime)
-      @response = response
-      @mime = mime
-    end
-    attr_reader :mime
-    def inspect
-      @response.inspect
-    end
-    def to_s
-      @response.to_s
-    end
-  end
-
-  class BindingWithMime < OpenStruct
-    def mime_type=(v)
-      @mime_type = v
-    end
-    def mime_type
-      @mime_type || 'text/plain'
-    end
-  end
-
-
   class Kernel
-    attr_accessor :user_ns
+    RED = "\e[31m"
+    WHITE = "\e[37m"
+    RESET = "\e[0m"
 
-    def self.html(s)
-      @output_mime = "text/html"
-      s
+    class<< self
+      attr_accessor :instance
     end
 
-    def execution_count
-      @execution_count
-    end
+    attr_reader :session
 
-    def output_mime
-      @output_mime
-    end
+    def initialize(config_file)
+      @config = MultiJson.load(File.read(config_file))
+      IRuby.logger.debug("IRuby kernel start with config #{@config}")
+      Kernel.instance = self
 
-    def initialize session, reply_socket, pub_socket
-      @session = session
-      @reply_socket = reply_socket
-      @pub_socket = pub_socket
-      @user_ns = BindingWithMime.new.send(:binding)
-      @history = []
+      @session = Session.new(@config)
+      $stdout = OStream.new(@session, :stdout)
+      $stderr = OStream.new(@session, :stderr)
+
       @execution_count = 0
-      #@compiler = CommandCompiler.new()
-      @completer = KernelCompleter.new(@user_ns)
+      @backend = create_backend
+      @running = true
+    end
 
-      # Build dict of handlers for message types
-      @handlers = {}
-      ['execute_request', 'complete_request', 'kernel_info_request'].each do |msg_type|
-        @handlers[msg_type] = msg_type
+    def create_backend
+      PryBackend.new
+    rescue Exception => e
+      IRuby.logger.warn "Could not load PryBackend: #{e.message}\n#{e.backtrace.join("\n")}" unless LoadError === e
+      PlainBackend.new
+    end
+
+    def run
+      send_status :starting
+      while @running
+        dispatch
       end
     end
 
-    def abort_queue
-      while true
-        #begin
-          ident = @reply_socket.recv(ZMQ::NOBLOCK)
-        #rescue Exception => e
-          #if e.errno == ZMQ::EAGAIN
-            #break
-          #else
-            #assert self.reply_socket.rcvmore(), "Unexpected missing message part."
-            #msg = self.reply_socket.recv_json()
-          #end
-        #end
-        msg_type = msg['header']['msg_type']
-        reply_type = msg_type.split('_')[0] + '_reply'
-        @session.send(@reply_socket, reply_type, {status: 'aborted'}, msg)
-        # reply_msg = @session.msg(reply_type, {status: 'aborted'}, msg)
-        # @reply_socket.send(ident,ZMQ::SNDMORE)
-        # @reply_socket.send(reply_msg.to_json)
-        # We need to wait a bit for requests to come in. This can probably
-        # be set shorter for true asynchronous clients.
-        sleep(0.1)
-      end
-    end
-
-    def kernel_info_request(ident, parent)
-      reply_content = {
-        protocol_version: [4, 0],
-
-        # Language version number (mandatory).
-        # It is Python version number (e.g., [2, 7, 3]) for the kernel
-        # included in IPython.
-        language_version: RUBY_VERSION.split('.').map { |x| x.to_i },
-
-        # Programming language in which kernel is implemented (mandatory).
-        # Kernel included in IPython returns 'python'.
-        language: "ruby"
-      }
-      reply_msg = @session.send(@reply_socket, 'kernel_info_reply',
-            reply_content, parent, ident
-      )
-    end
-    
-    def send_status(status, parent)
-      @session.send(@pub_socket, "status", {execution_state: status}, parent)
-    end
-
-    def execute_request(ident, parent)
+    def dispatch
+      msg = @session.recv(:reply)
+      type = msg[:header]['msg_type']
+      raise "Unknown message type: #{msg.inspect}" unless type =~ /comm_|_request\Z/ && respond_to?(type)
       begin
-        code = parent['content']['code']
-      rescue
-        STDERR.puts "Got bad msg: "
-        STDERR.puts parent
-        return
+        send_status :busy
+        send(type, msg)
+      ensure
+        send_status :idle
       end
-      # pyin_msg = @session.msg()
-      if ! parent['content'].fetch('silent', false)
-        @execution_count += 1
-      end
-      self.send_status("busy", parent)
-      @session.send(@pub_socket, 'pyin', {code: code}, parent)
-      reply_content = {status: 'ok',
-          payload: [],
-          user_variables: {},
-          user_expressions: {},
-        }
+    rescue Exception => e
+      IRuby.logger.debug "Kernel error: #{e.message}\n#{e.backtrace.join("\n")}"
+      @session.send(:publish, :error, error_message(e))
+    end
+
+    def kernel_info_request(msg)
+      @session.send(:reply, :kernel_info_reply,
+                    protocol_version: '5.0',
+                    implementation: 'iruby',
+                    banner: "IRuby #{IRuby::VERSION}",
+                    implementation_version: IRuby::VERSION,
+                    language_info: {
+                      name: 'ruby',
+                      version: RUBY_VERSION,
+                      mimetype: 'application/x-ruby',
+                      file_extension: '.rb'
+                    })
+    end
+
+    def send_status(status)
+      @session.send(:publish, :status, execution_state: status)
+    end
+
+    def execute_request(msg)
+      code = msg[:content]['code']
+      @execution_count += 1 if msg[:content]['store_history']
+      @session.send(:publish, :execute_input, code: code, execution_count: @execution_count)
+
+      content = {
+        status: :ok,
+        payload: [],
+        user_expressions: {},
+        execution_count: @execution_count
+      }
       result = nil
       begin
-        $displayhook.set_parent(parent)
-        $stdout.set_parent(parent)
-
-        eval("@mime_type=nil",@user_ns)
-        result = eval(code, @user_ns)
+        result = @backend.eval(code, msg[:content]['store_history'])
+      rescue SystemExit
+        content[:payload] << { source: :ask_exit }
       rescue Exception => e
-        # $stderr.puts e.inspect
-        #etype, evalue, tb = sys.exc_info()
-        ename, evalue, tb = e.class.to_s, e.message, e.backtrace
-        tb = format_exception(ename, evalue, tb)
-        #tb = "1, 2, 3"
-        exc_content = {
-          ename: ename,
-          evalue: evalue,
-          traceback: tb,
-          #etype: etype,
-          #status: 'error',
-        }
-        # STDERR.puts exc_content
-        @session.send(@pub_socket, 'pyerr', exc_content, parent)
-
-        reply_content = exc_content
+        content = error_message(e)
+        @session.send(:publish, :error, content)
       end
-      reply_content['execution_count'] = @execution_count
-      
-      # reply_msg = @session.msg('execute_reply', reply_content, parent)
-      #$stdout.puts reply_msg
-      #$stderr.puts reply_msg
-      #@session.send(@reply_socket, ident + reply_msg)
-      reply_msg = @session.send(@reply_socket, 'execute_reply', reply_content, parent, ident)
-      if reply_msg['content']['status'] == 'error'
-        abort_queue
-      end
-      if ! result.nil? and ! parent['content']['silent']
-        output = ResponseWithMime.new(result, eval("@mime_type",@user_ns))
-        $displayhook.display(output)
-      end
-      self.send_status("idle", parent)
+      @session.send(:reply, :execute_reply, content)
+      @session.send(:publish, :execute_result,
+                    data: Display.display(result),
+                    metadata: {},
+                    execution_count: @execution_count) unless result.nil? || msg[:content]['silent']
     end
 
-    def complete_request(ident, parent)
-      matches = {
-        matches: @completer.complete(parent['content']['line'], parent['content']['text']),
-        status: 'ok',
-        matched_text: parent['content']['line'],
-      }
-      completion_msg = @session.send(@reply_socket, 'complete_reply',
-                                     matches, parent, ident)
-      return nil
+    def error_message(e)
+      { status: :error,
+        ename: e.class.to_s,
+        evalue: e.message,
+        traceback: ["#{RED}#{e.class}#{RESET}: #{e.message}", *e.backtrace.map { |l| "#{WHITE}#{l}#{RESET}" }],
+        execution_count: @execution_count }
     end
 
-    def start()
-      self.send_status("starting", nil)
-      while true
-        ident, msg = @session.recv(@reply_socket, 0)
-        begin
-          handler = @handlers[msg['header']['msg_type']]
-        rescue
-          handler = nil
-        end
-        if handler.nil?
-          STDERR.puts "UNKNOWN MESSAGE TYPE: #{msg['header']['msg_type']} #{msg}"
-        else
-          # STDERR.puts 'handling ' + omsg.inspect
-          send(handler, ident, msg)
-        end
+    def complete_request(msg)
+      # HACK for #26, only complete last line
+      code = msg[:content]['code']
+      if start = code.rindex("\n")
+        code = code[start+1..-1]
+        start += 1
       end
+      @session.send(:reply, :complete_reply,
+                    matches: @backend.complete(code),
+                    status: :ok,
+                    cursor_start: start.to_i,
+                    cursor_end: msg[:content]['cursor_pos'])
     end
 
-  private
-    def format_exception(name, value, backtrace)
-      tb = []
-      tb << "#{name.red}: #{value}"
-      tb.concat(backtrace.map { |l| l.white })
-      tb
+    def connect_request(msg)
+      @session.send(:reply, :connect_reply, Hash[%w(shell_port iopub_port stdin_port hb_port).map {|k| [k, @config[k]] }])
+    end
+
+    def shutdown_request(msg)
+      @session.send(:reply, :shutdown_reply, msg[:content])
+      @running = false
+    end
+
+    def history_request(msg)
+      # we will just send back empty history for now, pending clarification
+      # as requested in ipython/ipython#3806
+      @session.send(:reply, :history_reply, history: [])
+    end
+
+    def inspect_request(msg)
+      result = @backend.eval(msg[:content]['code'])
+      @session.send(:reply, :inspect_reply,
+                    status: :ok,
+                    data: Display.display(result),
+                    metadata: {})
+    rescue Exception => e
+      IRuby.logger.warn "Inspection error: #{e.message}\n#{e.backtrace.join("\n")}"
+      @session.send(:reply, :inspect_reply, status: :error)
+    end
+
+    def comm_open(msg)
+      comm_id = msg[:content]['comm_id']
+      target_name = msg[:content]['target_name']
+      Comm.comm[comm_id] = Comm.target[target_name].new(target_name, comm_id)
+    end
+
+    def comm_msg(msg)
+      Comm.comm[msg[:content]['comm_id']].handle_msg(msg[:content]['data'])
+    end
+
+    def comm_close(msg)
+      comm_id = msg[:content]['comm_id']
+      Comm.comm[comm_id].handle_close(msg[:content]['data'])
+      Comm.comm.delete(comm_id)
     end
   end
 end

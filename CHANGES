@@ -1,0 +1,122 @@
+0.2.9 (2016-05-02)
+  
+  Bug Fixes:
+    * Fix an error where a NoMethodError was being raised where a table rendered using an Array of Hashes has more than `maxcols` columns. (@CGamesPlay)
+    * Patch PryBackend to throw unterminated string and unexpected end-of-file syntax errors (@kylekyle)
+
+  Enhnacements:
+    * Add an IRuby::Input class which provides widgets for getting inputs from users. (@kylekyle)
+    * Add data_uri dependency (@kylekyle)
+    * Added a clear_output display function (@mrkn)
+    * Doc fixes for installation (@kozo2, @generall)
+
+0.2.8 (2015-12-06)
+
+  * Add compatibility with ffi-rzmq
+  * Windows support
+
+0.2.7 (2015-07-02)
+
+  * Fix problem with autoloaded constants in Display, problem with sciruby gem
+
+0.2.6 (2015-06-21)
+
+  * Check registered kernel and Gemfile to prevent gem loading problems
+  * Support to_tex method for the rendering
+
+0.2.5 (2015-06-07)
+
+  * Fix #29, empty signatures
+  * Move iruby utils to IRuby::Utils module
+  * Add IRuby.tex alias for IRuby.latex
+  * Remove example notebooks from gem
+
+0.2.4 (2015-06-02)
+
+  * Better exception handling
+  * Fix ctrl-C issue #17
+  * Fix timeout issue #19
+
+0.2.3 (2015-05-31)
+
+  * Fix notebook indentation
+  * Fix tab completion for multiple lines
+
+0.2.2 (2015-05-26)
+
+  * Support history variables In, Out, _, _i etc
+  * Internal refactoring and minor bugfixes
+
+0.2.1 (2015-05-26)
+
+  * Copy Ruby logo to kernel specification
+
+0.2.0 (2015-05-25)
+
+  * Dropped IPython2 support
+  * Dropped Ruby < 2.0.0 support
+  * Supports and requires now IPython3/Jupyter
+  * Switch from ffi-rzmq to rbczmq
+  * Added IRuby::Conn (experimental, to be used by widgets)
+  * iruby register/unregister commands to register IRuby kernel in Jupyter
+
+0.1.13 (2014-08-19)
+
+  * Improved IRuby.table, supports :maxrows and :maxcols
+  * IRuby#javascript workaround (https://github.com/ipython/ipython/issues/6259)
+
+0.1.12 (2014-08-01)
+
+  * IRuby#table add option maxrows
+  * powerful display system with format and datatype registry, see #25
+  * Add IRuby#javascript
+  * Add IRuby#svg
+
+0.1.11 (2014-07-08)
+
+  * Push binding if pry binding stack is empty
+
+0.1.10 (2014-07-08)
+
+  * Fix #19 (pp)
+  * Handle exception when symlink cannot be created
+  * Fix dependencies and Pry backend
+
+0.1.9 (2014-02-28)
+
+  * Check IPython version
+
+0.1.7/0.1.8
+
+  * Bugfixes #11, #12, #13
+
+0.1.6 (2013-10-11)
+
+  * Print Matrix and GSL::Matrix as LaTeX
+  * Add check for Pry version
+
+0.1.5 (2013-10-03)
+
+  * Implement a rich display system
+  * Fix error output
+
+0.1.4 (2013-10-03)
+
+  * Extract display handler from kernel
+  * Always return a text/plain response
+
+0.1.3 (2013-10-03)
+
+  * Implement missing request handlers
+  * Detect if Bundler is running and set kernel_cmd appropriately
+  * Improve Pry integration
+  * Add support for the gems gnuplot, gruff, rmagick and mini_magick
+
+0.1.2 (2013-10-02)
+
+  * Support for Pry added
+  * Launch `iruby console` if plain `iruby` is started
+
+0.1.0 (2013-10-02)
+
+  * Cleanup and rewrite of some parts
