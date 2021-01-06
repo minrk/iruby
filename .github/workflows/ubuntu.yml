@@ -1,0 +1,61 @@
+name: CI
+
+on:
+- push
+- pull_request
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-20.04
+        - ubuntu-latest
+        ruby:
+        - 3.0
+        - 2.7
+        - 2.6
+        - 2.5
+        - 2.4
+        - 2.3
+        - debug
+        include:
+        - { os: windows-latest , ruby: mingw }
+        - { os: windows-latest , ruby: mswin }
+        exclude:
+        - { os: windows-latest , ruby: 3.0 }
+        - { os: windows-latest , ruby: debug }
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 1
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ${{ matrix.ruby }}
+
+    - name: Install requirements on ubuntu
+      if: ${{ startsWith(matrix.os, 'ubuntu') }}
+      run: |
+        sudo apt install -y --no-install-recommends \
+                 libczmq-dev \
+                 python3 \
+                 python3-pip \
+                 python3-setuptools
+        sudo pip3 install wheel
+        sudo pip3 install -r ci/requirements.txt
+
+    - run: gem install bundler
+
+    - run: bundle install --jobs 4 --retry 3
+
+    - run: rake
+
+    - run: rake build
+
+    - run: gem install pkg/*.gem
